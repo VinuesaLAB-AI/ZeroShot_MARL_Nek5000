@@ -207,7 +207,7 @@ if [[ "${NODES}" == "auto" ]]; then
     else
         TASK_DESC="nproc=${NPROC} (embedded, no agent)"
     fi
-    echo "[GEN] ${TASK_DESC} -> -N ${NODES} --ntasks-per-node=${NTASKS_PER_NODE}"
+    echo "[GEN] ${TASK_DESC} -> -N ${NODES} --ntasks-per-node=${NTASKS_PER_NODE}" >&2
 fi
 
 # -----------------------------------------------------------------------------

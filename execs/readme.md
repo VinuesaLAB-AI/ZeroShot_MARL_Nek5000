@@ -1,6 +1,6 @@
 # Running jobs
 
-Three scripts, one idea: the **payload** scripts hold every command needed to run
+The launchers share one approach: the **payload** scripts hold every command needed to run
 a case, the **generator** wraps a payload into an sbatch file whose header you
 control from the command line.
 
@@ -9,12 +9,28 @@ control from the command line.
 | [channel-run.sh](channel-run.sh) | all commands for the minimal-channel cases (`python -m nek_MARL`) |
 | [wing-run.sh](wing-run.sh) | all commands for the NACA4412 wing cases (`python -m meta_MARL`) |
 | [nek-solo-run.sh](nek-solo-run.sh) | embedded-policy evaluation (`nek5000_solo`, no Python MPI rank) |
-| [sjob-gen.sh](sjob-gen.sh) | writes (and optionally submits) a SLURM script wrapping either payload |
+| [sjob-gen.sh](sjob-gen.sh) | writes (and optionally submits) a SLURM script wrapping a payload |
 | [sjob-solo](sjob-solo) | focused `nek-solo` front-end to `sjob-gen.sh` |
 
 The payload scripts carry **no** SLURM directives and detect their environment
 from `$SLURM_JOB_ID`, so the identical command line works on a workstation and
 inside a batch job. Run everything from the repo root.
+
+Build `simulation.compile_path` before launching. For example:
+
+```bash
+source ~/.bashrc.openmpi_ucx
+./utils/compile_case.sh --path envs/cases/mini_channel --solver drl
+./utils/compile_case.sh --path envs/cases/mini_channel --solver raw
+```
+
+Use `drl` for `channel-run.sh`/`wing-run.sh` and `raw` for `nek-solo-run.sh`.
+The wrapper selects the case's solver version; the removed `--version` and
+`--case_name_v17` flags are unnecessary. See the
+[project README](../readme.md#compile-a-case) for the case/backend table and
+[configuration migration notes](../readme.md#configuration-migration-and-validation)
+for older YAMLs whose case directories have moved. Every learned-policy example
+also needs its configured checkpoint and restart fields.
 
 ---
 
@@ -22,30 +38,30 @@ inside a batch job. Run everything from the repo root.
 
 ```bash
 # channel — training
-./execs/channel-run.sh --config conf/MC-ng-111.yml --mode train
+./execs/channel-run.sh --config conf/mini_channel/MC-ng-111.yml --mode train
 
 # channel — evaluate a trained policy over two environments
-./execs/channel-run.sh --config conf/MC-ng-111.yml --mode evaluate \
+./execs/channel-run.sh --config conf/mini_channel/MC-ng-111.yml --mode evaluate \
     --nenv 2 --iostep 10000 --smpstep 12
 
 # channel — resume a sweep: this run does ranks 5..8, a previous one did 1..4
-./execs/channel-run.sh --config conf/MC-ng-111.yml --mode evaluate \
+./execs/channel-run.sh --config conf/mini_channel/MC-ng-111.yml --mode evaluate \
     --env-start 5 --nenv 8
 
 # channel — statistics sweep over several cases
 ./execs/channel-run.sh --mode evaluate --nenv 1 --nb-interactions 20000 \
-    --config conf/MC-shapcf.yml --config conf/MC-shapvel.yml
+    --config conf/mini_channel/MC-ng-100.yml --config conf/mini_channel/MC-ng-111.yml
 
 # wing
-./execs/wing-run.sh --config conf/NACA4412-SHAP-Vel-2540.yml --mv-data yes
+./execs/wing-run.sh --config conf/naca4412_200k/NACA4412-SHAP-Vel-2540.yml --mv-data yes
 
 # embedded actor: every MPI rank runs Nek, no Python rank is spawned
-./execs/nek-solo-run.sh --config conf/mini_channel/MC-nes.yml \
+./execs/nek-solo-run.sh --config conf/mini_channel/MC-ng-111.yml \
     --nb-interactions 20000
 
 # repeat an embedded run while archiving the previous env_<rank> first
 # (field outputs, recorder segments, monitoring data, and policy provenance)
-./execs/nek-solo-run.sh --config conf/mini_channel/MC-nes.yml --mv-data yes
+./execs/nek-solo-run.sh --config conf/mini_channel/MC-ng-111.yml --mv-data yes
 ```
 
 `--dry-run` prints the mpirun lines instead of executing them, and `-h` lists
@@ -65,7 +81,7 @@ every flag. Useful ones:
 ## 2. Generating a SLURM job
 
 ```bash
-./execs/sjob-gen.sh --case channel --config conf/MC-ng-111.yml --mode train \
+./execs/sjob-gen.sh --case channel --config conf/mini_channel/MC-ng-111.yml --mode train \
     -J ng-111 -t 24:00:00 -p batch --begin +2h
 ```
 
@@ -80,7 +96,7 @@ The knobs that used to require editing a template:
 | `-p, --partition` | `-p` |
 | `-b, --begin` | `--begin` — accepts `+2h`, `+30m`, `+1d`, `16:30`, `tomorrow`, `2026-06-29T16:23:42` |
 | `-t, --time` | `-t` |
-| `-N, --nodes` | `-N`; **`auto` (default)** = `ceil((nproc + 1) / ntasks-per-node)` read from the config |
+| `-N, --nodes` | `-N`; **`auto` (default)** = `ceil(ranks / ntasks-per-node)`; ranks = `nproc + 1` coupled, `nproc` solo |
 | `--ntasks-per-node`, `--cpus-per-task` | same |
 | `-A, --account`, `-e, --email`, `--mail-type` | `-A`, `--mail-user`, `--mail-type` |
 | `--no-exclusive` | drops `--exclusive` |
@@ -95,33 +111,33 @@ parameters, and `--` bridges the two. Run `execs/channel-run.sh --help` /
 
 ```bash
 # fully-parameterized channel evaluate, submitted directly
-./execs/sjob-gen.sh --case channel --config conf/MC-ng-111.yml --mode evaluate \
+./execs/sjob-gen.sh --case channel --config conf/mini_channel/MC-ng-111.yml --mode evaluate \
     -J eval-ng111 -N 2 --begin 2026-06-29T16:23:42 --submit -- \
     --nenv 2 --iostep 10000 --write-interval 10000 --smpstep 12 \
     --reward-fn net_gain --alpha 0.5 --nb-interactions 20000
 
 # wing evaluate with archiving, submitted directly
-./execs/sjob-gen.sh --case wing --config conf/NACA4412-SHAP-Vel-2540.yml \
+./execs/sjob-gen.sh --case wing --config conf/naca4412_200k/NACA4412-SHAP-Vel-2540.yml \
     -J shap-wing -N 86 -t 24:00:00 --submit -- \
     --mv-data yes --case-name naca_wing --id 002
 
 # embedded actor: auto sizing uses nproc exactly (there is no +1 agent rank)
-./execs/sjob-gen.sh --case nek-solo --config conf/mini_channel/MC-nes.yml \
+./execs/sjob-gen.sh --case nek-solo --config conf/mini_channel/MC-ng-111.yml \
     -J solo-nes -t 24:00:00 --submit -- --nb-interactions 20000
 
 # equivalent short form for embedded-only submissions
-./execs/sjob-solo --config conf/mini_channel/MC-nes.yml \
+./execs/sjob-solo --config conf/mini_channel/MC-ng-111.yml \
     -J solo-nes -t 24:00:00 --submit -- --nb-interactions 20000
 
 # large channel, Re_tau=207 / omega1 SS energy-gain controller.
 # First build lc_n7 once with --solver raw; auto sizing requests 512 Nek ranks.
 ./execs/sjob-solo \
-    --config conf/omega1_BASE/lc-omega1-SS-eng-embedded-lc_n7.yml \
+    --config conf/omega1_BASE/solo/nes.yml \
     -J lc-omega1-solo -t 24:00:00 --submit
 
 # large-channel analytic opposition control; no SB3 checkpoint is required
 ./execs/sjob-solo \
-    --config conf/omega1_BASE/lc-omega1-SS-oc-embedded-lc_n7.yml \
+    --config conf/omega1_BASE/solo/oc.yml \
     -J lc-omega1-oc-solo -t 24:00:00 --submit
 ```
 
@@ -145,5 +161,5 @@ scancel  <jobid>       # cancel
 ---
 
 The previous-generation scripts (`run-script`, `wing-script`, `sjob-*.sh`, and
-`../utils/sjob_gen/`) are kept for reference but are superseded by the three
-scripts above.
+`../utils/sjob_gen/`) are kept for reference but are superseded by the launchers
+and generator above.

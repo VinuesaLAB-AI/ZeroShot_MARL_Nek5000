@@ -11,6 +11,8 @@
 !/data/restarts/rs6_mini_Channel/**
 !/data/policies_meta_wing_dr/
 !/data/policies_meta_wing_dr/**
+!/data/policies_meta_wing_nes/
+!/data/policies_meta_wing_nes/**
 *mask*
 !runs/readme.md
 !data/readme.md

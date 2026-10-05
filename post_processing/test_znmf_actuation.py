@@ -1,11 +1,12 @@
 """Unit tests for the standalone post-hoc GLL zero-mean action tool."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 
-from znmf_actuation import face_gll_weights, zero_mean_action
+from znmf_actuation import EmbeddedPolicy, face_gll_weights, zero_mean_action
 
 
 def _record(agents, action):
@@ -31,6 +32,34 @@ def test_face_aware_weights_and_constant_field_are_zero_mean():
     assert np.allclose(result.removed_mean, [3.0, -2.0])
     assert np.allclose(result.act_zero_mean, 0.0)
     assert np.allclose(result.residual_mean, 0.0)
+
+
+def _policy():
+    return EmbeddedPolicy(
+        path=Path("actor.pol"), dimensions=(2, 2, 1), activations=(1, 2),
+        squash=True, action_lower=-1.0, action_upper=1.0,
+        observation_scale=0.064, action_scale_in_file=0.064,
+        observation_permutation=np.array([2, 1]),
+        weights=[np.eye(2), np.array([[2.0, -1.0]])],
+        biases=[np.zeros(2), np.zeros(1)],
+    )
+
+
+def test_policy_surface_evaluation_with_permutation_and_scaling():
+    # Reversing inputs and applying ReLU gives [0, 2] and [4, 0].
+    # The last layer therefore evaluates tanh(-2) and tanh(8).
+    observations = np.array([[2.0, -3.0], [-4.0, 4.0]])
+    expected = np.tanh([-2.0, 8.0]) * 0.3
+    for precision in (4, 8):
+        action = _policy().evaluate_normalised(observations, 0.3, precision)
+        np.testing.assert_allclose(action, expected, atol=1e-7, rtol=0.0)
+
+
+def test_policy_surface_rejects_inconsistent_layer_counts():
+    policy = _policy()
+    policy.biases.pop()
+    with np.testing.assert_raises_regex(ValueError, "inconsistent policy layer counts"):
+        policy.evaluate_normalised(np.zeros((1, 2)), 1.0, 8)
 
 
 def test_active_support_is_zero_mean_and_leaves_inactive_values_raw():

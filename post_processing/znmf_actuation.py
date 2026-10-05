@@ -144,11 +144,15 @@ class EmbeddedPolicy:
             )
         if precision not in {4, 8}:
             raise ValueError(f"{self.path}: unsupported embedded precision {precision}")
+        # zip(strict=True) needs Python 3.10; the solver environment uses 3.8.
+        if not (len(self.weights) == len(self.biases) == len(self.activations)
+                == len(self.dimensions) - 1):
+            raise ValueError(f"{self.path}: inconsistent policy layer counts")
 
         dtype = np.float32 if precision == 4 else np.float64
         values = observations[:, self.observation_permutation - 1].astype(dtype)
         for weights, bias, activation in zip(self.weights, self.biases,
-                                             self.activations, strict=True):
+                                             self.activations):
             values = values @ weights.astype(dtype).T + bias.astype(dtype)
             if activation == 1:
                 values = np.maximum(values, dtype(0.0))

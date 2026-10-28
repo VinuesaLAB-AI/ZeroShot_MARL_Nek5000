@@ -37,3 +37,5 @@ __pycache__/
 # excludes; re-include the dir first, then its contents
 !/data/policies_meta_wing_dr/**/logs/
 !/data/policies_meta_wing_dr/**/logs/**
+!/data/policies_meta_wing_nes/**/logs/
+!/data/policies_meta_wing_nes/**/logs/**

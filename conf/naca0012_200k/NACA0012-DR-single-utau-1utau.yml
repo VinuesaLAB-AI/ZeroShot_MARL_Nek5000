@@ -56,7 +56,7 @@ simulation:
     #I/O
     CASENAME: 'naca_wing' 
     exeName : 'nek5000'
-    compile_path   : "envs/cases/naca0012_200k_constant_utau"
+    compile_path   : "envs/cases/naca0012_200k_NES70"
     restart_folder : "data/restarts/rs8_naca0012_DRL_261028"
     shared_data_path : "data/simulations/naca0012_200k_30mode"
     solver_version : "v17"

@@ -3,7 +3,7 @@
    3 DIMENSIONAL RUN
           118 PARAMETERS FOLLOW                                                 
 1.000000E+00	p001	DENSITY
--2.000000E+05	p002	==>	Re=400k
+-2.000000E+05	p002	==>	Re=200k
   0.000000E+00     p003
   0.000000E+00     p004
   0.000000E+00     p005
